@@ -50,3 +50,4 @@ npm run dev:api
 - `GET /api/health` - health + DB connectivity check
 - `POST /api/auth/login` - login with `{ username, password }`, returns `{ token, user }`
 - `GET /api/auth/me` - get current user from `Authorization: Bearer <token>`
+- `GET /api/tickets/verify?token=...` - verify ticket token, returns `valid`, `checked-in`, or `invalid`

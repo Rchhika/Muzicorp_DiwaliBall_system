@@ -60,6 +60,16 @@ async function seed() {
         `,
         [attendeeId, attendee.username, passwordHash]
       );
+
+      await client.query(
+        `
+        insert into tickets (attendee_id, ticket_id, status)
+        values ($1, $2, 'valid')
+        on conflict (ticket_id) do update
+          set attendee_id = excluded.attendee_id
+        `,
+        [attendeeId, attendee.id]
+      );
     }
 
     await client.query('commit');

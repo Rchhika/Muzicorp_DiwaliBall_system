@@ -18,11 +18,11 @@ const Login = () => {
     }
   }, [isHydrating, isAuthenticated, navigate]);
 
-  const handleLogin = (e) => {
+  const handleLogin = async (e) => {
     e.preventDefault();
     setError('');
 
-    const result = login({ username, password });
+    const result = await login({ username, password });
 
     if (!result.ok) {
       setError(result.error ?? 'Invalid credentials provided.');

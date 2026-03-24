@@ -3,13 +3,20 @@ import dotenv from 'dotenv';
 import express from 'express';
 import cors from 'cors';
 import { runQuery } from './db.js';
-import { signSessionToken, verifyPassword, verifySessionToken } from './auth.js';
+import {
+  signSessionToken,
+  signTicketToken,
+  verifyPassword,
+  verifySessionToken,
+  verifyTicketToken,
+} from './auth.js';
 
 dotenv.config();
 
 const app = express();
 const port = process.env.PORT || 4000;
 const clientOrigin = process.env.CLIENT_ORIGIN || 'http://localhost:5173';
+const appPublicUrl = process.env.APP_PUBLIC_URL || `http://localhost:${port}`;
 
 app.use(
   cors({
@@ -17,6 +24,26 @@ app.use(
   })
 );
 app.use(express.json());
+
+function buildUserPayload(attendee) {
+  const ticketToken = signTicketToken({
+    attendeeId: attendee.id,
+    ticketId: attendee.ticket_id,
+  });
+  const verifyUrl = `${appPublicUrl}/api/tickets/verify?token=${encodeURIComponent(ticketToken)}`;
+
+  return {
+    id: attendee.ticket_id,
+    attendeeId: attendee.id,
+    name: attendee.name,
+    username: attendee.username,
+    tableId: attendee.table_id,
+    dietary: attendee.dietary,
+    ticketType: attendee.ticket_type,
+    ticketToken,
+    verifyUrl,
+  };
+}
 
 app.get('/api/health', async (_req, res) => {
   try {
@@ -78,15 +105,7 @@ app.post('/api/auth/login', async (req, res) => {
 
     return res.json({
       token,
-      user: {
-        id: attendee.ticket_id,
-        attendeeId: attendee.id,
-        name: attendee.name,
-        username: attendee.username,
-        tableId: attendee.table_id,
-        dietary: attendee.dietary,
-        ticketType: attendee.ticket_type,
-      },
+      user: buildUserPayload(attendee),
     });
   } catch (error) {
     return res.status(500).json({ message: error.message });
@@ -119,18 +138,82 @@ app.get('/api/auth/me', async (req, res) => {
     }
 
     return res.json({
-      user: {
-        id: attendee.ticket_id,
-        attendeeId: attendee.id,
-        name: attendee.name,
-        username: attendee.username,
-        tableId: attendee.table_id,
-        dietary: attendee.dietary,
-        ticketType: attendee.ticket_type,
-      },
+      user: buildUserPayload(attendee),
     });
   } catch {
     return res.status(401).json({ message: 'Invalid or expired token.' });
+  }
+});
+
+app.get('/api/tickets/verify', async (req, res) => {
+  const token = req.query.token;
+  if (!token || typeof token !== 'string') {
+    return res.status(400).json({ status: 'invalid', message: 'Missing ticket token.' });
+  }
+
+  try {
+    const payload = verifyTicketToken(token);
+    const result = await runQuery(
+      `
+      select
+        t.ticket_id,
+        t.status,
+        t.checked_in_at,
+        a.name,
+        a.table_id,
+        a.ticket_type
+      from tickets t
+      join attendees a on a.id = t.attendee_id
+      where t.ticket_id = $1 and t.attendee_id = $2
+      limit 1
+      `,
+      [payload.ticketId, payload.attendeeId]
+    );
+
+    const ticket = result.rows[0];
+    if (!ticket) {
+      return res.status(404).json({ status: 'invalid', message: 'Ticket not found.' });
+    }
+
+    if (ticket.status === 'invalid') {
+      return res.status(403).json({
+        status: 'invalid',
+        message: 'Ticket is marked invalid.',
+        ticket: {
+          ticketId: ticket.ticket_id,
+          name: ticket.name,
+          tableId: ticket.table_id,
+          ticketType: ticket.ticket_type,
+        },
+      });
+    }
+
+    if (ticket.status === 'checked-in') {
+      return res.status(200).json({
+        status: 'checked-in',
+        message: 'Ticket has already been checked in.',
+        ticket: {
+          ticketId: ticket.ticket_id,
+          name: ticket.name,
+          tableId: ticket.table_id,
+          ticketType: ticket.ticket_type,
+          checkedInAt: ticket.checked_in_at,
+        },
+      });
+    }
+
+    return res.status(200).json({
+      status: 'valid',
+      message: 'Ticket is valid.',
+      ticket: {
+        ticketId: ticket.ticket_id,
+        name: ticket.name,
+        tableId: ticket.table_id,
+        ticketType: ticket.ticket_type,
+      },
+    });
+  } catch {
+    return res.status(401).json({ status: 'invalid', message: 'Invalid or expired ticket token.' });
   }
 });
 
