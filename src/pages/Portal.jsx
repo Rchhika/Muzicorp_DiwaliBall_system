@@ -1,29 +1,108 @@
-import React, { useEffect } from 'react';
-import { useLocation, useNavigate } from 'react-router-dom';
+import React, { useMemo, useRef, useState } from 'react';
 import { motion } from 'framer-motion';
 import { QRCodeSVG } from 'qrcode.react';
 import { Download, Calendar, MapPin, Clock } from 'lucide-react';
+import { useAuth } from '../auth/AuthContext';
+
+function sanitizeFilenamePart(value) {
+  return String(value ?? '')
+    .trim()
+    .replace(/[^\w.-]+/g, '-')
+    .replace(/-+/g, '-')
+    .replace(/^-|-$/g, '')
+    .slice(0, 60);
+}
+
+function downloadBlob(blob, filename) {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+}
+
+async function svgToPngBlob(svgElement, { size = 1024 } = {}) {
+  const cloned = svgElement.cloneNode(true);
+  cloned.setAttribute('width', String(size));
+  cloned.setAttribute('height', String(size));
+
+  const serializer = new XMLSerializer();
+  const svgText = serializer.serializeToString(cloned);
+  const svgBlob = new Blob([svgText], { type: 'image/svg+xml;charset=utf-8' });
+  const svgUrl = URL.createObjectURL(svgBlob);
+
+  try {
+    const img = new Image();
+    img.decoding = 'async';
+    img.src = svgUrl;
+    await new Promise((resolve, reject) => {
+      img.onload = resolve;
+      img.onerror = reject;
+    });
+
+    const canvas = document.createElement('canvas');
+    canvas.width = size;
+    canvas.height = size;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) throw new Error('Canvas not supported');
+
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(0, 0, size, size);
+    ctx.drawImage(img, 0, 0, size, size);
+
+    const pngBlob = await new Promise((resolve) => canvas.toBlob(resolve, 'image/png'));
+    if (!pngBlob) throw new Error('Failed to create PNG');
+    return pngBlob;
+  } finally {
+    URL.revokeObjectURL(svgUrl);
+  }
+}
 
 const Portal = () => {
-  const location = useLocation();
-  const navigate = useNavigate();
-  const user = location.state?.user;
-
-  // Protect route if no user data
-  useEffect(() => {
-    if (!user) {
-      navigate('/login');
-    }
-  }, [user, navigate]);
+  const { user } = useAuth();
+  const qrContainerRef = useRef(null);
+  const [saveError, setSaveError] = useState('');
 
   if (!user) return null;
 
-  const qrValue = JSON.stringify({ 
-    id: user.id, 
-    name: user.name, 
-    table: user.tableId,
-    timestamp: new Date().toISOString()
-  });
+  const qrValue = useMemo(
+    () =>
+      JSON.stringify({
+        id: user.id,
+        name: user.name,
+        table: user.tableId,
+        timestamp: new Date().toISOString(),
+      }),
+    [user.id, user.name, user.tableId]
+  );
+
+  const handleSaveTicket = async () => {
+    setSaveError('');
+
+    try {
+      const svg = qrContainerRef.current?.querySelector('svg');
+      if (!svg) throw new Error('QR code not found');
+
+      const pngBlob = await svgToPngBlob(svg, { size: 1024 });
+      const filename = `diwali-ball-ticket-${sanitizeFilenamePart(user.name)}-${sanitizeFilenamePart(user.id)}.png`;
+
+      // Best mobile UX when supported (iOS Safari/Chrome Android support varies by version)
+      if (navigator.share && window.File) {
+        const file = new File([pngBlob], filename, { type: 'image/png' });
+        if (!navigator.canShare || navigator.canShare({ files: [file] })) {
+          await navigator.share({ files: [file], title: 'Diwali Ball Ticket' });
+          return;
+        }
+      }
+
+      downloadBlob(pngBlob, filename);
+    } catch {
+      setSaveError('Unable to save ticket on this device. Please try a different browser.');
+    }
+  };
 
   return (
     <div className="min-h-[100svh] w-full flex items-center justify-center bg-[var(--color-bg-dark)] px-4 py-24 relative overflow-hidden">
@@ -104,7 +183,7 @@ const Portal = () => {
                 <p className="text-sm font-bold text-gray-500 mb-1 uppercase tracking-widest text-center mt-2">Admit One</p>
                 <p className="text-2xl font-black text-white text-center mb-8">{user.name}</p>
 
-                <div className="bg-white p-4 rounded-2xl shadow-inner mb-8">
+                <div ref={qrContainerRef} className="bg-white p-4 rounded-2xl shadow-inner mb-8">
                   <QRCodeSVG 
                     value={qrValue} 
                     size={200} 
@@ -126,10 +205,19 @@ const Portal = () => {
                   </div>
                 </div>
 
-                {/* Save button (visual only for now) */}
-                <button className="flex items-center justify-center gap-2 text-[var(--color-brand-500)] text-sm font-bold hover:text-white transition-colors mt-4">
+                <button
+                  type="button"
+                  onClick={handleSaveTicket}
+                  className="flex items-center justify-center gap-2 text-[var(--color-brand-500)] text-sm font-bold hover:text-white transition-colors mt-4"
+                >
                   <Download className="w-4 h-4" /> Save Ticket to Phone
                 </button>
+
+                {saveError && (
+                  <p className="mt-3 text-xs font-bold uppercase tracking-widest text-red-400 text-center">
+                    {saveError}
+                  </p>
+                )}
              </div>
            </div>
          </motion.div>
