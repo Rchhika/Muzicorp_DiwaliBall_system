@@ -1,0 +1,42 @@
+@import "tailwindcss";
+
+@theme {
+  --color-brand-100: #fef3c7;
+  --color-brand-500: #d4af37;
+  --color-brand-900: #6b5718;
+
+  --color-bg-dark: #000000;
+  --color-bg-surface: #111111;
+  --color-bg-surface-elevated: rgba(20, 20, 20, 0.6);
+  --color-border-dark: rgba(255, 255, 255, 0.1);
+
+  --font-sans: 'Inter', system-ui, -apple-system, sans-serif;
+}
+
+@layer base {
+  :root {
+    color-scheme: dark;
+  }
+  
+  body {
+    @apply bg-[var(--color-bg-dark)] text-gray-200 font-sans antialiased m-0 p-0;
+  }
+
+  h1, h2, h3, h4, h5, h6 {
+    @apply text-white font-medium tracking-tight;
+  }
+}
+
+@layer utilities {
+  .glass {
+    @apply bg-[var(--color-bg-surface-elevated)] backdrop-blur-md border border-[var(--color-border-dark)];
+  }
+  
+  .text-glow {
+    text-shadow: 0 0 10px rgba(212, 175, 55, 0.5);
+  }
+  
+  .box-glow {
+    box-shadow: 0 0 20px rgba(212, 175, 55, 0.15);
+  }
+}

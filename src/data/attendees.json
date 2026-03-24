@@ -1,0 +1,38 @@
+[
+  {
+    "id": "A101",
+    "name": "Arjun Patel",
+    "username": "arjun.patel",
+    "password": "password123",
+    "tableId": 1,
+    "dietary": "Vegetarian",
+    "ticketType": "Standard"
+  },
+  {
+    "id": "A102",
+    "name": "Priya Sharma",
+    "username": "priya.sharma",
+    "password": "password123",
+    "tableId": 1,
+    "dietary": "None",
+    "ticketType": "Standard"
+  },
+  {
+    "id": "A103",
+    "name": "Rohan Gupta",
+    "username": "rohan.gupta",
+    "password": "password123",
+    "tableId": 12,
+    "dietary": "Vegan",
+    "ticketType": "Standard"
+  },
+  {
+    "id": "A104",
+    "name": "Ananya Singh",
+    "username": "ananya.singh",
+    "password": "password123",
+    "tableId": 12,
+    "dietary": "Gluten-Free",
+    "ticketType": "Standard"
+  }
+]
