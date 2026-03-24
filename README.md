@@ -51,3 +51,11 @@ npm run dev:api
 - `POST /api/auth/login` - login with `{ username, password }`, returns `{ token, user }`
 - `GET /api/auth/me` - get current user from `Authorization: Bearer <token>`
 - `GET /api/tickets/verify?token=...` - verify ticket token, returns `valid`, `checked-in`, or `invalid`
+- `POST /api/tickets/check-in` - staff check-in with header `x-staff-key` and body `{ token }`
+
+## Staff scanner flow
+
+- Open `/staff` in the frontend app.
+- Enter `STAFF_API_KEY`.
+- Paste scanned QR verify URL (or raw ticket token).
+- Click **Verify**, then **Check In**.

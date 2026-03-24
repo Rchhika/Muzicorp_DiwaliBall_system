@@ -17,6 +17,7 @@ const app = express();
 const port = process.env.PORT || 4000;
 const clientOrigin = process.env.CLIENT_ORIGIN || 'http://localhost:5173';
 const appPublicUrl = process.env.APP_PUBLIC_URL || `http://localhost:${port}`;
+const staffApiKey = process.env.STAFF_API_KEY;
 
 app.use(
   cors({
@@ -24,6 +25,34 @@ app.use(
   })
 );
 app.use(express.json());
+
+function getTicketTokenFromReq(req) {
+  if (typeof req.query.token === 'string' && req.query.token) return req.query.token;
+  if (typeof req.body?.token === 'string' && req.body.token) return req.body.token;
+  return null;
+}
+
+async function getTicketDetailsFromToken(token) {
+  const payload = verifyTicketToken(token);
+  const result = await runQuery(
+    `
+    select
+      t.ticket_id,
+      t.status,
+      t.checked_in_at,
+      t.attendee_id,
+      a.name,
+      a.table_id,
+      a.ticket_type
+    from tickets t
+    join attendees a on a.id = t.attendee_id
+    where t.ticket_id = $1 and t.attendee_id = $2
+    limit 1
+    `,
+    [payload.ticketId, payload.attendeeId]
+  );
+  return result.rows[0] ?? null;
+}
 
 function buildUserPayload(attendee) {
   const ticketToken = signTicketToken({
@@ -146,31 +175,13 @@ app.get('/api/auth/me', async (req, res) => {
 });
 
 app.get('/api/tickets/verify', async (req, res) => {
-  const token = req.query.token;
-  if (!token || typeof token !== 'string') {
+  const token = getTicketTokenFromReq(req);
+  if (!token) {
     return res.status(400).json({ status: 'invalid', message: 'Missing ticket token.' });
   }
 
   try {
-    const payload = verifyTicketToken(token);
-    const result = await runQuery(
-      `
-      select
-        t.ticket_id,
-        t.status,
-        t.checked_in_at,
-        a.name,
-        a.table_id,
-        a.ticket_type
-      from tickets t
-      join attendees a on a.id = t.attendee_id
-      where t.ticket_id = $1 and t.attendee_id = $2
-      limit 1
-      `,
-      [payload.ticketId, payload.attendeeId]
-    );
-
-    const ticket = result.rows[0];
+    const ticket = await getTicketDetailsFromToken(token);
     if (!ticket) {
       return res.status(404).json({ status: 'invalid', message: 'Ticket not found.' });
     }
@@ -210,6 +221,82 @@ app.get('/api/tickets/verify', async (req, res) => {
         name: ticket.name,
         tableId: ticket.table_id,
         ticketType: ticket.ticket_type,
+      },
+    });
+  } catch {
+    return res.status(401).json({ status: 'invalid', message: 'Invalid or expired ticket token.' });
+  }
+});
+
+app.post('/api/tickets/check-in', async (req, res) => {
+  if (!staffApiKey) {
+    return res.status(500).json({ status: 'error', message: 'STAFF_API_KEY is not configured.' });
+  }
+
+  const providedStaffKey = req.headers['x-staff-key'];
+  if (providedStaffKey !== staffApiKey) {
+    return res.status(401).json({ status: 'unauthorized', message: 'Invalid staff key.' });
+  }
+
+  const token = getTicketTokenFromReq(req);
+  if (!token) {
+    return res.status(400).json({ status: 'invalid', message: 'Missing ticket token.' });
+  }
+
+  try {
+    const payload = verifyTicketToken(token);
+    const checkInResult = await runQuery(
+      `
+      update tickets
+      set status = 'checked-in', checked_in_at = now()
+      where ticket_id = $1 and attendee_id = $2 and status = 'valid'
+      returning ticket_id, status, checked_in_at
+      `,
+      [payload.ticketId, payload.attendeeId]
+    );
+
+    if (checkInResult.rows[0]) {
+      const ticket = await getTicketDetailsFromToken(token);
+      return res.status(200).json({
+        status: 'checked-in',
+        message: 'Ticket checked in successfully.',
+        ticket: {
+          ticketId: ticket.ticket_id,
+          name: ticket.name,
+          tableId: ticket.table_id,
+          ticketType: ticket.ticket_type,
+          checkedInAt: ticket.checked_in_at,
+        },
+      });
+    }
+
+    const existingTicket = await getTicketDetailsFromToken(token);
+    if (!existingTicket) {
+      return res.status(404).json({ status: 'invalid', message: 'Ticket not found.' });
+    }
+
+    if (existingTicket.status === 'checked-in') {
+      return res.status(200).json({
+        status: 'checked-in',
+        message: 'Ticket has already been checked in.',
+        ticket: {
+          ticketId: existingTicket.ticket_id,
+          name: existingTicket.name,
+          tableId: existingTicket.table_id,
+          ticketType: existingTicket.ticket_type,
+          checkedInAt: existingTicket.checked_in_at,
+        },
+      });
+    }
+
+    return res.status(403).json({
+      status: 'invalid',
+      message: 'Ticket is not eligible for check-in.',
+      ticket: {
+        ticketId: existingTicket.ticket_id,
+        name: existingTicket.name,
+        tableId: existingTicket.table_id,
+        ticketType: existingTicket.ticket_type,
       },
     });
   } catch {
