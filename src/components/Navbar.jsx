@@ -1,11 +1,14 @@
 import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { Link, useLocation } from 'react-router-dom';
-import { Ticket, Home as HomeIcon } from 'lucide-react';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
+import { Ticket, Home as HomeIcon, LogOut } from 'lucide-react';
 import clsx from 'clsx';
+import { useAuth } from '../auth/AuthContext';
 
 const Navbar = () => {
   const location = useLocation();
+  const navigate = useNavigate();
+  const { isAuthenticated, logout } = useAuth();
   const [scrolled, setScrolled] = useState(false);
 
   useEffect(() => {
@@ -18,8 +21,13 @@ const Navbar = () => {
 
   const links = [
     { name: 'Home', path: '/', icon: HomeIcon },
-    { name: 'Portal', path: '/login', icon: Ticket },
+    { name: 'Portal', path: isAuthenticated ? '/portal' : '/login', icon: Ticket },
   ];
+
+  const handleLogout = () => {
+    logout();
+    navigate('/login', { replace: true });
+  };
 
   return (
     <motion.nav 
@@ -48,10 +56,13 @@ const Navbar = () => {
             <span className="text-[10px] text-gray-400 tracking-widest uppercase font-semibold leading-none">The Diwali Ball</span>
           </div>
         </Link>
-        <div className="flex gap-2">
+        <div className="flex gap-2 items-center">
           {links.map((link) => {
             const Icon = link.icon;
-            const isActive = location.pathname === link.path || (link.path === '/login' && location.pathname === '/portal');
+            const isActive =
+              location.pathname === link.path ||
+              (link.path === '/login' && location.pathname === '/portal') ||
+              (link.path === '/portal' && location.pathname === '/portal');
             return (
               <Link 
                 key={link.name} 
@@ -68,6 +79,20 @@ const Navbar = () => {
               </Link>
             )
           })}
+
+          {isAuthenticated && (
+            <button
+              type="button"
+              onClick={handleLogout}
+              className={clsx(
+                "px-5 py-2.5 rounded-full flex items-center gap-2 transition-all duration-500 text-xs font-bold uppercase tracking-widest",
+                "text-gray-400 hover:text-white hover:bg-white/5 border border-transparent hover:border-white/10"
+              )}
+            >
+              <LogOut className="w-4 h-4" />
+              <span className="hidden sm:block">Logout</span>
+            </button>
+          )}
         </div>
       </div>
     </motion.nav>

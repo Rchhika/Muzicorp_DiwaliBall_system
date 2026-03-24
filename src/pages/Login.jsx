@@ -1,8 +1,8 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
 import { Lock, User, ArrowRight, ShieldAlert } from 'lucide-react';
-import attendees from '../data/attendees.json';
+import { useAuth } from '../auth/AuthContext';
 
 const Login = () => {
   const [username, setUsername] = useState('');
@@ -10,23 +10,31 @@ const Login = () => {
   const [error, setError] = useState('');
   const [isHovered, setIsHovered] = useState(false);
   const navigate = useNavigate();
+  const { login, isAuthenticated, isHydrating } = useAuth();
+
+  useEffect(() => {
+    if (!isHydrating && isAuthenticated) {
+      navigate('/portal', { replace: true });
+    }
+  }, [isHydrating, isAuthenticated, navigate]);
 
   const handleLogin = (e) => {
     e.preventDefault();
     setError('');
 
-    const user = attendees.find(
-      (u) => u.username.toLowerCase() === username.trim().toLowerCase() && u.password === password.trim()
-    );
+    const result = login({ username, password });
 
-    if (user) {
-      setTimeout(() => {
-        navigate('/portal', { state: { user } });
-      }, 600);
-    } else {
-      setError('Invalid credentials provided.');
+    if (!result.ok) {
+      setError(result.error ?? 'Invalid credentials provided.');
+      return;
     }
+
+    setTimeout(() => {
+      navigate('/portal');
+    }, 600);
   };
+
+  if (!isHydrating && isAuthenticated) return null;
 
   return (
     <div className="min-h-screen w-full flex items-center justify-center bg-[#030303] px-4 relative overflow-hidden font-sans">
@@ -136,7 +144,7 @@ const Login = () => {
           <div className="mt-12 pt-8 border-t border-white/5 text-center flex flex-col items-center">
             <span className="text-[10px] uppercase tracking-[0.3em] text-[#52525b] mb-4 font-bold">Test Access Credentials</span>
             <div className="flex gap-3">
-              <span className="px-4 py-2 bg-[#141414] rounded-lg text-xs font-mono text-[#a1a1aa] border border-[#27272a] shadow-inner">rohan.gupta</span>
+              <span className="px-4 py-2 bg-[#141414] rounded-lg text-xs font-mono text-[#a1a1aa] border border-[#27272a] shadow-inner">rohan.chhika</span>
               <span className="px-4 py-2 bg-[#141414] rounded-lg text-xs font-mono text-[#a1a1aa] border border-[#27272a] shadow-inner">password123</span>
             </div>
           </div>
