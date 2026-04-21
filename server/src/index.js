@@ -304,6 +304,65 @@ app.post('/api/tickets/check-in', async (req, res) => {
   }
 });
 
+app.get('/api/staff/search', async (req, res) => {
+  if (!staffApiKey) {
+    return res.status(500).json({ status: 'error', message: 'STAFF_API_KEY is not configured.' });
+  }
+
+  const providedStaffKey = req.headers['x-staff-key'];
+  if (providedStaffKey !== staffApiKey) {
+    return res.status(401).json({ status: 'unauthorized', message: 'Invalid staff key.' });
+  }
+
+  const q = String(req.query.q ?? '').trim();
+  if (!q || q.length < 2) {
+    return res.status(400).json({ status: 'invalid', message: 'Query must be at least 2 characters.' });
+  }
+
+  try {
+    const result = await runQuery(
+      `
+      select
+        a.id,
+        a.name,
+        a.username,
+        a.table_id,
+        a.ticket_type,
+        t.ticket_id,
+        t.status,
+        t.checked_in_at
+      from attendees a
+      left join tickets t on t.attendee_id = a.id
+      where a.name ilike $1 or a.username ilike $1
+      order by a.name asc
+      limit 10
+      `,
+      [`%${q}%`]
+    );
+
+    const attendees = result.rows.map((row) => {
+      const ticketToken = row.ticket_id
+        ? signTicketToken({ attendeeId: row.id, ticketId: row.ticket_id })
+        : null;
+      return {
+        attendeeId: row.id,
+        name: row.name,
+        username: row.username,
+        tableId: row.table_id,
+        ticketType: row.ticket_type,
+        ticketId: row.ticket_id,
+        ticketToken,
+        ticketStatus: row.status,
+        checkedInAt: row.checked_in_at,
+      };
+    });
+
+    return res.json({ status: 'ok', attendees });
+  } catch (error) {
+    return res.status(500).json({ status: 'error', message: error.message });
+  }
+});
+
 app.listen(port, () => {
   console.log(`API server running on http://localhost:${port}`);
 });
