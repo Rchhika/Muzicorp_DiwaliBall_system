@@ -66,18 +66,12 @@ const Portal = () => {
   const qrContainerRef = useRef(null);
   const [saveError, setSaveError] = useState('');
 
-  if (!user) return null;
-
   const qrValue = useMemo(
-    () =>
-      JSON.stringify({
-        id: user.id,
-        name: user.name,
-        table: user.tableId,
-        timestamp: new Date().toISOString(),
-      }),
-    [user.id, user.name, user.tableId]
+    () => user?.verifyUrl || user?.ticketToken || '',
+    [user?.verifyUrl, user?.ticketToken]
   );
+
+  if (!user) return null;
 
   const handleSaveTicket = async () => {
     setSaveError('');

@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
-import { Ticket, Home as HomeIcon, LogOut } from 'lucide-react';
+import { Ticket, Home as HomeIcon, LogOut, ShieldCheck } from 'lucide-react';
 import clsx from 'clsx';
 import { useAuth } from '../auth/AuthContext';
 
@@ -22,6 +22,7 @@ const Navbar = () => {
   const links = [
     { name: 'Home', path: '/', icon: HomeIcon },
     { name: 'Portal', path: isAuthenticated ? '/portal' : '/login', icon: Ticket },
+    { name: 'Staff', path: '/staff', icon: ShieldCheck },
   ];
 
   const handleLogout = () => {
@@ -62,7 +63,8 @@ const Navbar = () => {
             const isActive =
               location.pathname === link.path ||
               (link.path === '/login' && location.pathname === '/portal') ||
-              (link.path === '/portal' && location.pathname === '/portal');
+              (link.path === '/portal' && location.pathname === '/portal') ||
+              (link.path === '/staff' && location.pathname === '/staff');
             return (
               <Link 
                 key={link.name} 

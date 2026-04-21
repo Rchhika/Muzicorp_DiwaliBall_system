@@ -1,48 +1,75 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
-import attendees from '../data/attendees.json';
 
-const STORAGE_KEY = 'diwaliBall.session.user';
+const TOKEN_STORAGE_KEY = 'diwaliBall.session.token';
+const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:4000';
 
 const AuthContext = createContext(null);
 
-function safeJsonParse(value) {
-  try {
-    return JSON.parse(value);
-  } catch {
-    return null;
-  }
-}
-
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
-  const [isHydrating, setIsHydrating] = useState(true);
+  const [token, setToken] = useState(() => window.localStorage.getItem(TOKEN_STORAGE_KEY));
+  const [isHydrating, setIsHydrating] = useState(() => Boolean(window.localStorage.getItem(TOKEN_STORAGE_KEY)));
 
   useEffect(() => {
-    const raw = window.localStorage.getItem(STORAGE_KEY);
-    const parsed = raw ? safeJsonParse(raw) : null;
-    setUser(parsed);
-    setIsHydrating(false);
-  }, []);
-
-  const login = useCallback(({ username, password }) => {
-    const normalizedUsername = String(username ?? '').trim().toLowerCase();
-    const normalizedPassword = String(password ?? '').trim();
-
-    const matched = attendees.find(
-      (u) => u.username.toLowerCase() === normalizedUsername && u.password === normalizedPassword
-    );
-
-    if (!matched) {
-      return { ok: false, error: 'Invalid credentials provided.' };
+    if (!token) {
+      setUser(null);
+      setIsHydrating(false);
+      return;
     }
 
-    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(matched));
-    setUser(matched);
-    return { ok: true, user: matched };
+    let cancelled = false;
+    fetch(`${API_BASE_URL}/api/auth/me`, {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+      .then(async (response) => {
+        if (!response.ok) throw new Error('Session invalid');
+        return response.json();
+      })
+      .then((data) => {
+        if (cancelled) return;
+        setUser(data.user ?? null);
+      })
+      .catch(() => {
+        if (cancelled) return;
+        window.localStorage.removeItem(TOKEN_STORAGE_KEY);
+        setToken(null);
+        setUser(null);
+      })
+      .finally(() => {
+        if (cancelled) return;
+        setIsHydrating(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [token]);
+
+  const login = useCallback(async ({ username, password }) => {
+    const response = await fetch(`${API_BASE_URL}/api/auth/login`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        username: String(username ?? '').trim(),
+        password: String(password ?? '').trim(),
+      }),
+    });
+
+    const data = await response.json().catch(() => ({}));
+
+    if (!response.ok || !data.token || !data.user) {
+      return { ok: false, error: data.message || 'Invalid credentials provided.' };
+    }
+
+    window.localStorage.setItem(TOKEN_STORAGE_KEY, data.token);
+    setToken(data.token);
+    setUser(data.user);
+    return { ok: true, user: data.user };
   }, []);
 
   const logout = useCallback(() => {
-    window.localStorage.removeItem(STORAGE_KEY);
+    window.localStorage.removeItem(TOKEN_STORAGE_KEY);
+    setToken(null);
     setUser(null);
   }, []);
 
@@ -51,10 +78,11 @@ export function AuthProvider({ children }) {
       user,
       isAuthenticated: Boolean(user),
       isHydrating,
+      token,
       login,
       logout,
     }),
-    [user, isHydrating, login, logout]
+    [user, isHydrating, token, login, logout]
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

@@ -1,16 +1,61 @@
-# React + Vite
+# Diwali Ball
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+Frontend app (Vite + React) with a lightweight Node/Express backend for pre-assigned attendee login and ticket data.
 
-Currently, two official plugins are available:
+## Backend setup (Neon PostgreSQL)
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+1. Create `.env` in the project root from `.env.example`.
+2. Add your Neon connection string to `DATABASE_URL`.
+3. Set a strong `JWT_SECRET`.
 
-## React Compiler
+Example:
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+```
+DATABASE_URL=postgresql://...
+JWT_SECRET=some-long-random-secret
+PORT=4000
+CLIENT_ORIGIN=http://localhost:5173
+```
 
-## Expanding the ESLint configuration
+## Database commands
 
-If you are developing a production application, we recommend using TypeScript with type-aware lint rules enabled. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) for information on how to integrate TypeScript and [`typescript-eslint`](https://typescript-eslint.io) in your project.
+Run migrations:
+
+```
+npm run db:migrate
+```
+
+Seed attendees from `src/data/attendees.json`:
+
+```
+npm run db:seed
+```
+
+## Run app + API
+
+Frontend:
+
+```
+npm run dev
+```
+
+Backend:
+
+```
+npm run dev:api
+```
+
+## API endpoints
+
+- `GET /api/health` - health + DB connectivity check
+- `POST /api/auth/login` - login with `{ username, password }`, returns `{ token, user }`
+- `GET /api/auth/me` - get current user from `Authorization: Bearer <token>`
+- `GET /api/tickets/verify?token=...` - verify ticket token, returns `valid`, `checked-in`, or `invalid`
+- `POST /api/tickets/check-in` - staff check-in with header `x-staff-key` and body `{ token }`
+
+## Staff scanner flow
+
+- Open `/staff` in the frontend app.
+- Enter `STAFF_API_KEY`.
+- Paste scanned QR verify URL (or raw ticket token).
+- Click **Verify**, then **Check In**.
